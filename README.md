@@ -36,26 +36,26 @@ Folder Structure
 		- ACR with Service connection type Docker Registry
 		- Kubernetes with Service connection type Kubernetes
 	- Project -> Pipelines
-            - Environments
-                  - Create New Environment:
-                        - Name: test
-                        - Resource: Kubernetes (Put all information to integrate with AKS)
-            - Library
-                  - Create 2 variables group:
-                        - bookstore
-                              - csproject
-                              - projectname
-                              - SONAR_PROJECT
-                        - demo_var
-                              - acrUrl
-                              - baseImage
-                              - containerName
-                              - imageVersionDotnet
-                              - imageVersionSonar
-                              - Registry
-                              - runtime
-                              - SONAR_TOKEN
-                              - SONAR_URL
+   		- Environments
+			- Create New Environment:
+				- Name: test
+				- Resource: Kubernetes (Put all information to integrate with AKS)
+		- Library
+			- Create 2 variables group:
+				- bookstore
+					- csproject
+					- projectname
+					- SONAR_PROJECT
+				- demo_var
+					- acrUrl
+					- baseImage
+					- containerName
+					- imageVersionDotnet
+					- imageVersionSonar
+					- Registry
+					- runtime
+					- SONAR_TOKEN
+					- SONAR_URL
 - SonarQube Server
   	- Generate Tokens
 - ACR
