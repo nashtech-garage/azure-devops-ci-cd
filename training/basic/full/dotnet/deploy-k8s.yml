@@ -1,0 +1,33 @@
+stages:
+- stage: Deploy
+  displayName: Deploy stage
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy job
+    environment: 'test'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: none
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: 'manifests'
+              downloadPath: '$(System.ArtifactsDirectory)/manifests'
+
+          - script: |
+              ls -la $(System.ArtifactsDirectory)/manifests
+              cat $(System.ArtifactsDirectory)/manifests/deployment.yml
+              cat $(System.ArtifactsDirectory)/manifests/service.yml
+
+          - task: KubernetesManifest@0
+            displayName: Deploy to Kubernetes cluster
+            inputs:
+              action: deploy
+              connectionType: 'kubernetesServiceConnection'
+              kubernetesServiceConnection: 'demotraining'
+              namespace: demo
+              manifests: |
+                $(System.ArtifactsDirectory)/manifests/deployment.yml
+                $(System.ArtifactsDirectory)/manifests/service.yml

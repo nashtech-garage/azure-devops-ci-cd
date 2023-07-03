@@ -1,0 +1,26 @@
+trigger:
+  branches:
+    include:
+    - master
+    - azuredevops
+    - feature/*
+    - bug/*
+
+# Pool build
+pool:
+  vmImage: 'ubuntu-latest'
+
+resources:
+  repositories:
+  - repository: devops
+    endpoint: Training
+    type: github
+    name: nashtech-garage/azure-devops-ci-cd
+    ref: main
+
+variables:
+  - group: demo_var
+  - group: bookstore
+
+stages:
+  - template: templates/dotnet/build.yml@devops

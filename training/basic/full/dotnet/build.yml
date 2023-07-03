@@ -1,0 +1,190 @@
+stages:
+- stage: Build
+  jobs:
+    - job: build
+      strategy:
+        matrix:
+          builddeploy:
+            task: 'build'
+          sonarqube:
+            task: 'sonarqube'
+            
+      steps:
+      - checkout: self
+        path: s
+
+      - checkout: devops
+
+      - script: |
+          cp -rf $(build.sourcesdirectory)/azure-devops-template/templates/dotnet/docker/* ./.ci
+          rm -rf $(build.sourcesdirectory)/azure-devops-template
+        displayName: "Prepare files"
+
+      - task: DotNetCoreCLI@2
+        displayName: Build solution
+        condition: and(succeeded(), eq(variables['task'], 'build'))  
+        inputs:
+          command: 'build'
+          arguments: '-c Release -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) .'
+
+      # Publish it as .NET 6 self-contained application for linux runtime
+      - task: DotNetCoreCLI@2
+        displayName: Publish solution
+        condition: and(succeeded(), eq(variables['task'], 'build'))  
+        inputs:
+          command: publish
+          publishWebProjects: false
+          projects: '$(csproject)'
+          arguments: '-c Release --no-build --no-restore -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) --self-contained --output app'
+          zipAfterPublish: false
+          modifyOutputPath: false
+
+      - task: DotNetCoreCLI@2
+        displayName: Run Unit Test
+        condition: and(succeeded(), eq(variables['task'], 'build'))  
+        inputs:
+          command: 'test'
+          projects: '**/*Tests/*.csproj'
+          arguments: '--no-build --no-restore -c Release -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) --collect "XPlat Code Coverage" --verbosity minimal'
+          testRunTitle: 'Unit Test'
+
+      - task: reportgenerator@5
+        displayName: 'Merge code coverage reports'
+        condition: and(succeeded(), eq(variables['task'], 'build')) 
+        inputs:
+          reports: '$(Agent.TempDirectory)/**/*.xml'
+          targetdir: '$(Agent.TempDirectory)/coverage'
+          reporttypes: 'Cobertura;HTMLInline;HTMLChart'
+          verbosity: 'Verbose'
+          
+      # Publish Test & Code Coverage Results
+      - task: PublishTestResults@2
+        condition: and(succeeded(), eq(variables['task'], 'build')) 
+        inputs:
+          testResultsFormat: 'VSTest'
+          testResultsFiles: '**/*.trx'
+          searchFolder: '$(Agent.TempDirectory)'
+
+      - task: PublishCodeCoverageResults@1
+        displayName: "Publish Code Coverage Results"
+        condition: and(succeeded(), eq(variables['task'], 'build')) 
+        inputs:
+          codeCoverageTool: 'Cobertura'
+          summaryFileLocation: '$(Agent.TempDirectory)/coverage/*.xml'
+          reportDirectory: '$(Agent.TempDirectory)/coverage'
+        env:
+          DISABLE_COVERAGE_AUTOGENERATE: 'true'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish Package'
+        condition: and(succeeded(), eq(variables['task'], 'build')) 
+        inputs:
+          targetPath:  '$(Build.SourcesDirectory)/app'
+          artifactName: 'app-$(Build.BuildId)'
+        
+      - task: Docker@2
+        displayName: SonarScanner
+        condition: and(succeeded(), eq(variables['task'], 'sonarqube')) 
+        inputs:
+          containerRegistry: $(Registry)
+          repository: $(containerName)
+          command: build
+          Dockerfile: './.ci/Dockerfile.sonar'
+          buildContext: '.'
+          arguments: "--build-arg BASEIMG=$(baseImage) --build-arg IMG_VERSION=$(imageVersionSonar) --build-arg SONAR_TOKEN=$(SONAR_TOKEN) \
+                      --build-arg SONAR_URL=$(SONAR_URL) --build-arg SONAR_PROJECT=$(SONAR_PROJECT) --build-arg DOTNET_RUNTIME_IDENTIFIER=$(runtime)"
+          tags: |
+            sonar
+
+    - job: buildpush
+      condition: succeeded()
+      dependsOn:
+      - build    
+      
+      steps:
+      - checkout: self
+        path: s
+
+      - checkout: devops
+
+      - script: |
+          cp -rf $(build.sourcesdirectory)/azure-devops-template/templates/dotnet/docker/* ./.ci
+          mv $(build.sourcesdirectory)/azure-devops-template/templates/deploy ./.cd
+          rm -rf $(build.sourcesdirectory)/azure-devops-template
+        displayName: "Prepare files"
+
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download Package'
+        inputs:
+          artifact: 'app-$(Build.BuildId)'
+          path: '$(Build.SourcesDirectory)/app'
+
+      - task: Docker@2
+        displayName: Login to ACR
+        inputs:
+          containerRegistry: $(Registry)
+          command: 'login'
+
+      - task: Docker@2
+        displayName: Build Docker Image
+        inputs:
+          containerRegistry: $(Registry)
+          repository: $(containerName)/$(projectname)
+          command: build
+          Dockerfile: './.ci/Dockerfile.ci'
+          buildContext: '.'
+          arguments: '--build-arg BASEIMG=$(baseImage) --build-arg IMG_VERSION=$(imageVersionDotnet)'
+          tags: |
+            $(Build.BuildId)
+            latest
+
+      # Push Images to ACR
+      - task: Docker@2
+        displayName: Push Docker Image
+        inputs:
+          command: push
+          repository: $(containerName)/$(projectname)
+          containerRegistry: $(Registry)
+          tags: |
+            $(Build.BuildId)
+            latest
+
+      # Trivy
+      - task: trivy@1
+        displayName: Scan Source Code
+        inputs:
+          version: 'latest'
+          path: './src'
+          severities: 'CRITICAL,HIGH'
+          exitCode: '0'
+
+      - task: trivy@1
+        displayName: Scan Docker Images
+        inputs:
+          version: 'latest'
+          loginDockerConfig: true
+          image: $(acrUrl)/$(containerName)/$(projectname):$(Build.BuildId)
+          severities: 'CRITICAL,HIGH'
+          exitCode: '0'
+
+      - task: replacetokens@4
+        inputs:
+          rootDirectory: '$(Build.SourcesDirectory)/.cd'
+          targetFiles: '**/*.yml'
+          encoding: 'auto'
+          tokenPattern: 'default'
+          writeBOM: true
+          actionOnMissing: 'warn'
+          keepToken: false
+          actionOnNoFiles: 'continue'
+          enableTransforms: false
+          useLegacyPattern: false
+          enableTelemetry: true
+        displayName: 'Replace variables'
+
+      - task: PublishPipelineArtifact@1
+        inputs:
+          artifactName: 'manifests'
+          path: '$(Build.SourcesDirectory)/.cd'
+
+- template: deploy-k8s.yml

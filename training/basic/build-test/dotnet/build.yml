@@ -1,0 +1,52 @@
+stages:
+- stage: Build
+  jobs:
+    - job: build
+      steps:
+      - task: DotNetCoreCLI@2
+        displayName: Build solution
+        inputs:
+          command: 'build'
+          arguments: '-c Release -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) .'
+
+      - task: DotNetCoreCLI@2
+        displayName: Publish solution
+        inputs:
+          command: publish
+          publishWebProjects: false
+          projects: '$(csproject)'
+          arguments: '-c Release --no-build --no-restore -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) --self-contained --output app'
+          zipAfterPublish: false
+          modifyOutputPath: false
+
+      - task: DotNetCoreCLI@2
+        displayName: Run Unit Test
+        inputs:
+          command: 'test'
+          projects: '**/*Tests/*.csproj'
+          arguments: '--no-build --no-restore -c Release -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) --collect "XPlat Code Coverage" --verbosity minimal'
+          testRunTitle: 'Unit Test'
+
+      - task: reportgenerator@5
+        displayName: 'Merge code coverage reports'
+        inputs:
+          reports: '$(Agent.TempDirectory)/**/*.xml'
+          targetdir: '$(Agent.TempDirectory)/coverage'
+          reporttypes: 'Cobertura;HTMLInline;HTMLChart'
+          verbosity: 'Verbose'
+          
+      # Publish Test & Code Coverage Results
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFormat: 'VSTest'
+          testResultsFiles: '**/*.trx'
+          searchFolder: '$(Agent.TempDirectory)'
+
+      - task: PublishCodeCoverageResults@1
+        displayName: "Publish Code Coverage Results"
+        inputs:
+          codeCoverageTool: 'Cobertura'
+          summaryFileLocation: '$(Agent.TempDirectory)/coverage/*.xml'
+          reportDirectory: '$(Agent.TempDirectory)/coverage'
+        env:
+          DISABLE_COVERAGE_AUTOGENERATE: 'true'

@@ -1,0 +1,20 @@
+stages:
+- stage: Build
+  jobs:
+    - job: build
+      steps:
+      - task: DotNetCoreCLI@2
+        displayName: Build solution
+        inputs:
+          command: 'build'
+          arguments: '-c Release -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) .'
+
+      - task: DotNetCoreCLI@2
+        displayName: Publish solution
+        inputs:
+          command: publish
+          publishWebProjects: false
+          projects: '$(csproject)'
+          arguments: '-c Release --no-build --no-restore -p:DOTNET_RUNTIME_IDENTIFIER=$(runtime) --self-contained --output app'
+          zipAfterPublish: false
+          modifyOutputPath: false
