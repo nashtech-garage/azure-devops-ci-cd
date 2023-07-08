@@ -1,0 +1,40 @@
+services:
+  frontend:
+    image: frontend
+    ports:
+      - 3000:3000
+    stdin_open: true
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    restart: always
+    networks:
+      - react-express
+    depends_on:
+      - backend
+
+  backend:
+    restart: always
+    image: backend
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - mongo
+    networks:
+      - express-mongo
+      - react-express
+
+  mongo:
+    restart: always
+    image: mongo:4.2.0
+    volumes:
+      - ./data:/data/db
+    networks:
+      - express-mongo
+    expose:
+      - 27017
+
+networks:
+  react-express:
+  express-mongo:
