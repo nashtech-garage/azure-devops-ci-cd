@@ -18,7 +18,7 @@ spec:
       - name: {{ .Values.name }}
         image: mongo
         ports:
-          - containerPort: {{ .Value.servicePort }}
+          - containerPort: {{ .Values.servicePort }}
         envFrom:
          - configMapRef:             
               name: {{ .Values.name }}
