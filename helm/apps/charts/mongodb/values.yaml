@@ -1,0 +1,13 @@
+# Replica count for the database deployment
+replicaCount: 2
+
+# name of resources such as statefulset, container, service
+name: mongodb
+
+# Image repository and tag for the database container
+image:
+  repository: mongo
+  tag: latest
+
+# Port for the database service
+servicePort: 27017

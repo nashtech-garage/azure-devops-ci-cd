@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.name }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "app.label" . | nindent 6 }}
+  serviceName: {{ .Values.name }}
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.label" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: {{ .Values.name }}
+        image: mongo
+        ports:
+          - containerPort: {{ .Value.servicePort }}
+        envFrom:
+         - configMapRef:             
+              name: {{ .Values.name }}
+         - secretRef:
+              name: {{ .Values.name }}
+        volumeMounts:
+            - name: data-volume
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: data-volume
+      spec:
+        storageClassName: {{ .Values.name }}
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "1Gi"

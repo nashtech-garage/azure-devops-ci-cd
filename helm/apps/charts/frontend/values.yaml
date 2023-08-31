@@ -1,0 +1,13 @@
+# Replica count for the frontend deployment
+replicaCount: 2
+
+# name of resources such as deployment, container, service
+name: frontend
+
+# Image repository and tag for the frontend container
+image:
+  repository: hnguyencanh/frontend
+  tag: latest
+
+# Port for the frontend service
+servicePort: 3000
