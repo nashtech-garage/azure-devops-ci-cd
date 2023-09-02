@@ -11,3 +11,7 @@ image:
 
 # Port for the backend service
 servicePort: 3000
+
+resources:
+  - kind: Deployment
+#    name: ...
