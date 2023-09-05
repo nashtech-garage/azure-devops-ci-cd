@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.name }}
+  name: frontend
 spec:
   selector:
     {{- include "app.label" . | nindent 4 }}
